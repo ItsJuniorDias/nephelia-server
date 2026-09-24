@@ -1,0 +1,19 @@
+{
+  "name": "nephelia-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend do Nephelia: matchmaker e orquestrador das partidas online (servidores dedicados Godot).",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/main.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "typescript": "^7.0.2"
+  }
+}

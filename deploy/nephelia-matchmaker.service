@@ -1,0 +1,30 @@
+# Serviço do systemd: liga o matchmaker quando a máquina liga e reinicia se ele cair.
+# Instalar: sudo cp deploy/nephelia-matchmaker.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now nephelia-matchmaker
+# Logs:     journalctl -u nephelia-matchmaker -f
+
+[Unit]
+Description=Nephelia matchmaker (partidas online)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nephelia
+WorkingDirectory=/opt/nephelia-server
+EnvironmentFile=/opt/nephelia-server/.env
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning src/main.ts
+Restart=always
+RestartSec=3
+# O matchmaker fecha as partidas ao desligar; dá tempo para elas saírem.
+TimeoutStopSec=15
+KillMode=mixed
+# Segurança básica: sem acesso ao resto do sistema.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/nephelia
+
+[Install]
+WantedBy=multi-user.target
