@@ -126,8 +126,19 @@ liberado**, com pelo menos 1 GB de RAM por 2 ou 3 partidas.
    curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
    sudo apt-get install -y nodejs
    ```
-6. **Servidor do jogo:** exporte o jogo como **servidor dedicado para Linux arm64** (preset
-   "Linux Server" no Godot) e copie para `/opt/nephelia/` (`nephelia_server.arm64` e o `.pck`).
+6. **Servidor do jogo:** o Godot oficial para Linux arm64 roda o pacote do jogo (`.pck`, exportado
+   no Mac pelo preset "Linux Server" do projeto do jogo):
+   ```bash
+   sudo mkdir -p /opt/nephelia && cd /opt/nephelia
+   sudo apt-get install -y unzip
+   sudo curl -LO https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.arm64.zip
+   sudo unzip Godot_v4.7.2-stable_linux.arm64.zip && sudo mv Godot_v4.7.2-stable_linux.arm64 godot
+   # do Mac: scp nephelia_server.pck ubuntu@<IP>:/tmp/ && sudo mv /tmp/nephelia_server.pck /opt/nephelia/
+   ./godot --headless --main-pack nephelia_server.pck -- --server --port=24799   # teste: deve
+   # aparecer NEPHELIA {"event":"ready",...}; Ctrl+C para sair
+   ```
+   No `.env`: `NEPHELIA_GODOT_BIN=/opt/nephelia/godot` e
+   `NEPHELIA_GODOT_ARGS=--headless --main-pack /opt/nephelia/nephelia_server.pck`.
 7. **Matchmaker:**
    ```bash
    sudo useradd --system --home /opt/nephelia-server nephelia
