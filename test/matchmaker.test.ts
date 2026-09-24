@@ -118,6 +118,36 @@ describe("Matchmaker", () => {
 		assert.equal(spawner.spawned[0]?.stopped, true);
 	});
 
+	test("a match server that cannot start is not retried every second", async () => {
+		const clock = new Clock();
+		const spawner = new FakeSpawner();
+		spawner.autoReady = false;
+		const matchmaker = new Matchmaker(testConfig({ warmMatches: 1 }), spawner, clock.now);
+		// O processo cai logo (ex.: Godot não instalado).
+		const failNext = (): void => {
+			const last = spawner.spawned.at(-1);
+			last?.exit(null);
+		};
+		matchmaker.tick();
+		failNext();
+		for (let second = 0; second < 10; second += 1) {
+			clock.advance(1_000);
+			matchmaker.tick();
+			if (spawner.spawned.length > 1 && !spawner.spawned.at(-1)?.stopped) {
+				failNext();
+			}
+		}
+		// Esperas de 2 s, 4 s, 8 s: em 10 s só 3 tentativas (e não 10).
+		assert.equal(spawner.spawned.length, 3);
+		assert.deepEqual(await matchmaker.request(request), { ok: false, error: "no_capacity" });
+		// Abriu uma vez: volta ao normal.
+		clock.advance(8_000);
+		spawner.autoReady = true;
+		matchmaker.tick();
+		await flush();
+		assert.equal(matchmaker.summary().matches.at(-1)?.status, "waiting");
+	});
+
 	test("a match server built with another version is closed", async () => {
 		const spawner = new FakeSpawner();
 		spawner.version = 7;

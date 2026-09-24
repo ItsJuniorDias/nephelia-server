@@ -91,6 +91,18 @@ Tudo por variáveis de ambiente `NEPHELIA_*` (ver `.env.example`) ou `--chave=va
 | `idleShutdownMs` | 120000 | partida vazia fecha depois disso |
 | `protocolVersion` | 1 | igual a `NetMessage.VERSION` no jogo |
 
+## Onde hospedar
+
+As partidas usam **UDP** (ENet) nas portas 24700–24719, e cada partida é o jogo inteiro rodando
+física e bots. Por isso o servidor precisa de uma **máquina virtual (VPS) com IP público e UDP
+liberado**, com pelo menos 1 GB de RAM por 2 ou 3 partidas.
+
+- **Serve:** Oracle Cloud (grátis, ver abaixo) ou qualquer VPS (Vultr, AWS Lightsail, Hetzner,
+  DigitalOcean).
+- **Não serve:** Render, Vercel, Heroku, Railway e parecidos. Eles só repassam HTTP, não UDP, e o
+  plano grátis deles é pequeno demais e dorme sem uso. O matchmaker até sobe lá, mas não tem onde
+  abrir as partidas ("spawn godot ENOENT"), e os jogadores não conseguiriam conectar.
+
 ## Colocar no ar (Oracle Cloud, grátis, São Paulo)
 
 1. **Conta:** crie a conta em oracle.com/cloud/free. Escolha **Brazil East (São Paulo)** como

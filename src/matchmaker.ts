@@ -6,6 +6,9 @@
 // ou o tempo acabar, para dois pedidos ao mesmo tempo não lotarem a mesma partida.
 // Partidas vazias fecham sozinhas, mas `warmMatches` ficam sempre prontas (entrar é na hora).
 //
+// Partida que não consegue abrir (Godot faltando, porta presa...) não é tentada de novo em
+// seguida: a próxima tentativa espera 2 s, 4 s, 8 s... até 60 s (`SPAWN_BACKOFF_*`).
+//
 // Nada aqui abre processo nem rede: quem abre é o `Spawner` (ver godot_spawner.ts), e o relógio é
 // injetado, então os testes controlam tudo.
 
@@ -16,6 +19,10 @@ import { silentLogger } from "./log.ts";
 import type { MatchPhase, ServerEvent } from "./protocol.ts";
 
 export type MatchStatus = "starting" | MatchPhase | "stopping";
+
+/** Espera depois de uma partida que não abriu: começa aqui e dobra a cada falha seguida. */
+export const SPAWN_BACKOFF_FIRST_MS = 2_000;
+export const SPAWN_BACKOFF_MAX_MS = 60_000;
 
 /** Processo de uma partida (parar = pedir para fechar). */
 export interface MatchHandle {
@@ -79,6 +86,9 @@ export class Matchmaker {
 	private readonly log: Logger;
 	private readonly matches = new Map<string, Match>();
 	private nextId = 1;
+	/** Partidas seguidas que não chegaram a abrir, e até quando não tenta abrir outra. */
+	private spawnFailures = 0;
+	private spawnBlockedUntil = 0;
 
 	constructor(config: Config, spawner: Spawner, now: () => number = Date.now, log: Logger = silentLogger) {
 		this.config = config;
@@ -148,6 +158,10 @@ export class Matchmaker {
 					this.log.error("match server has another protocol version", {
 						match: id, version: event.version, expected: this.config.protocolVersion,
 					});
+					// Build errado não se conserta sozinho: não fica abrindo outro a cada segundo.
+					this.spawnFailures += 1;
+					this.spawnBlockedUntil = this.now()
+						+ Math.min(SPAWN_BACKOFF_MAX_MS, SPAWN_BACKOFF_FIRST_MS * 2 ** (this.spawnFailures - 1));
 					this.stopMatch(match);
 					return;
 				}
@@ -160,6 +174,8 @@ export class Matchmaker {
 				}
 				this.updateEmpty(match);
 				this.settle(match);
+				this.spawnFailures = 0;
+				this.spawnBlockedUntil = 0;
 				this.log.info("match ready", { match: id, port: match.port });
 				break;
 			case "status": {
@@ -197,6 +213,15 @@ export class Matchmaker {
 		}
 		const expected = match.status === "stopping";
 		(expected ? this.log.info : this.log.warn)("match process exited", { match: id, code });
+		// Nem chegou a abrir: espera antes de tentar outra (não fica abrindo e caindo sem parar).
+		if (match.status === "starting") {
+			this.spawnFailures += 1;
+			const wait = Math.min(SPAWN_BACKOFF_MAX_MS, SPAWN_BACKOFF_FIRST_MS * 2 ** (this.spawnFailures - 1));
+			this.spawnBlockedUntil = this.now() + wait;
+			this.log.error("match server failed to start; waiting before the next try", {
+				failures: this.spawnFailures, waitMs: wait,
+			});
+		}
 		for (const waiter of match.waiters) {
 			waiter.reject(new Error("match process exited"));
 		}
@@ -246,6 +271,9 @@ export class Matchmaker {
 	}
 
 	private spawnMatch(): Match | null {
+		if (this.now() < this.spawnBlockedUntil) {
+			return null;
+		}
 		const running = [...this.matches.values()].filter((match) => match.status !== "stopping").length;
 		if (running >= this.config.maxMatches) {
 			return null;
