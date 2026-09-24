@@ -46,8 +46,9 @@ export interface MatchRequest {
 
 export type MatchErrorCode = "update_required" | "no_capacity" | "match_failed";
 
+/** Onde entrar: ENet = `host` e `port`; WebSocket = `url` (wss://.../play/<partida>). */
 export type MatchResult =
-	| { ok: true; host: string; port: number; match: string; ticket: string }
+	| { ok: true; host: string; port: number; url: string; match: string; ticket: string }
 	| { ok: false; error: MatchErrorCode };
 
 export interface MatchSummary {
@@ -120,7 +121,8 @@ export class Matchmaker {
 			}
 		}
 		this.log.info("match assigned", { match: match.id, name: request.name, platform: request.platform });
-		return { ok: true, host: this.config.publicHost, port: match.port, match: match.id, ticket };
+		const url = this.config.transport === "websocket" ? `${this.config.publicUrl}/play/${match.id}` : "";
+		return { ok: true, host: this.config.publicHost, port: match.port, url, match: match.id, ticket };
 	}
 
 	/** Chamado a cada segundo: vagas guardadas vencem, partidas vazias fecham, mantém as prontas. */
@@ -226,6 +228,15 @@ export class Matchmaker {
 			waiter.reject(new Error("match process exited"));
 		}
 		match.waiters = [];
+	}
+
+	/** Porta local da partida `id` pronta para receber gente (null = não existe ou não abriu). */
+	portOf(id: string): number | null {
+		const match = this.matches.get(id);
+		if (match === undefined || match.status === "starting" || match.status === "stopping") {
+			return null;
+		}
+		return match.port;
 	}
 
 	/** Fecha todas as partidas (desligando o serviço). */

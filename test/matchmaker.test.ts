@@ -23,6 +23,16 @@ describe("Matchmaker", () => {
 		assert.equal(matchmaker.summary().matches[0]?.reserved, 1);
 	});
 
+	test("in WebSocket mode the answer carries the wss:// address of the match", async () => {
+		const matchmaker = new Matchmaker(testConfig({ transport: "websocket", publicUrl: "wss://x.onrender.com" }),
+			new FakeSpawner());
+		const result = await matchmaker.request(request);
+		assert.ok(result.ok);
+		assert.equal(result.url, `wss://x.onrender.com/play/${result.match}`);
+		assert.equal(matchmaker.portOf(result.match), result.port);
+		assert.equal(matchmaker.portOf("nope"), null);
+	});
+
 	test("four players share a match; the fifth opens another one", async () => {
 		const spawner = new FakeSpawner();
 		const matchmaker = new Matchmaker(testConfig({ maxPlayers: 4 }), spawner);

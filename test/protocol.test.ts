@@ -27,6 +27,19 @@ test("ignores Godot log lines and broken events", () => {
 
 test("builds the match server arguments", () => {
 	assert.deepEqual(serverArgs(24701, "m3", 4), ["--server", "--port=24701", "--match-id=m3", "--max-players=4"]);
+	assert.deepEqual(serverArgs(24701, "m3", 4, true).slice(-2), ["--transport=websocket", "--bind=127.0.0.1"]);
+});
+
+test("on Render the defaults come from its variables (WebSocket, PORT, public address)", () => {
+	const config = loadConfig({ RENDER: "true", PORT: "10000", RENDER_EXTERNAL_URL: "https://nephelia-server.onrender.com" }, []);
+	assert.equal(config.transport, "websocket");
+	assert.equal(config.httpPort, 10000);
+	assert.equal(config.publicUrl, "wss://nephelia-server.onrender.com");
+	assert.equal(config.godotBin, "./bin/godot");
+	assert.equal(config.maxMatches, 1);
+	// O que foi configurado à mão continua valendo.
+	assert.equal(loadConfig({ RENDER: "true", RENDER_EXTERNAL_URL: "https://x.onrender.com", NEPHELIA_MAX_MATCHES: "2" }, []).maxMatches, 2);
+	assert.throws(() => loadConfig({ NEPHELIA_TRANSPORT: "websocket" }, []));
 });
 
 test("config comes from NEPHELIA_* variables and --key=value arguments", () => {

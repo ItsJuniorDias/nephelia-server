@@ -25,7 +25,8 @@ export class GodotSpawner implements Spawner {
 		onEvent: (event: ServerEvent) => void,
 		onExit: (code: number | null) => void,
 	): MatchHandle {
-		const args = [...this.config.godotArgs, "--", ...serverArgs(match.port, match.id, this.config.maxPlayers)];
+		const args = [...this.config.godotArgs, "--",
+			...serverArgs(match.port, match.id, this.config.maxPlayers, this.config.transport === "websocket")];
 		const child = spawn(this.config.godotBin, args, { stdio: ["ignore", "pipe", "pipe"] });
 		let exited = false;
 		const lines = createInterface({ input: child.stdout });

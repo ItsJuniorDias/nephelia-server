@@ -93,17 +93,42 @@ Tudo por variáveis de ambiente `NEPHELIA_*` (ver `.env.example`) ou `--chave=va
 
 ## Onde hospedar
 
-As partidas usam **UDP** (ENet) nas portas 24700–24719, e cada partida é o jogo inteiro rodando
-física e bots. Por isso o servidor precisa de uma **máquina virtual (VPS) com IP público e UDP
-liberado**, com pelo menos 1 GB de RAM por 2 ou 3 partidas.
+Há dois modos de conexão com as partidas (`NEPHELIA_TRANSPORT`):
 
-- **Serve:** Oracle Cloud (grátis, ver abaixo) ou qualquer VPS (Vultr, AWS Lightsail, Hetzner,
-  DigitalOcean).
-- **Não serve:** Render, Vercel, Heroku, Railway e parecidos. Eles só repassam HTTP, não UDP, e o
-  plano grátis deles é pequeno demais e dorme sem uso. O matchmaker até sobe lá, mas não tem onde
-  abrir as partidas ("spawn godot ENOENT"), e os jogadores não conseguiriam conectar.
+- **`websocket` (Render e parecidos).** Tudo entra por HTTPS numa porta só: o jogo conecta em
+  `wss://<serviço>/play/<partida>` e o matchmaker repassa para o servidor da partida, na mesma
+  máquina. É o modo usado hoje. Funciona em qualquer hospedagem que aceite WebSocket, mas é TCP: um
+  pacote perdido segura os seguintes (travadinhas em rede ruim).
+- **`enet` (VPS com UDP: Oracle Cloud, Vultr, Lightsail).** O jogo conecta direto na porta UDP da
+  partida (24700–24719). É o melhor para um jogo de tiro e dá para escolher servidor em São Paulo.
 
-## Colocar no ar (Oracle Cloud, grátis, São Paulo)
+Cada partida é o jogo inteiro rodando física e bots: no Mac, uns 30% de um núcleo e 60 a 100 MB.
+
+## Colocar no ar no Render (modo WebSocket)
+
+O Render não tem servidor no Brasil: escolha **Virginia (US East)**, a mais perto (uns 120 a 150 ms
+de ping). A região só é escolhida ao criar o serviço.
+
+1. **Pacote do servidor do jogo:** no projeto do jogo, com o Godot fechado, exporte o preset
+   **"Linux Server"** (servidor dedicado: imagens e modelos viram marcadores vazios, então nenhuma
+   arte vai para cá) para `game/nephelia_server.pck` deste repositório e faça commit.
+2. **Serviço no Render** (Web Service, runtime Node, ligado a este repositório):
+   - Build Command: `npm ci && bash scripts/install_godot.sh` (baixa o Godot oficial para Linux em
+     `bin/godot`)
+   - Start Command: `npm start`
+   - Health Check Path: `/v1/health`
+   - Plano: Starter (US$ 7) ou maior. No Starter (512 MB, meio núcleo) cabe **uma partida por vez**,
+     que é o padrão no Render (`NEPHELIA_MAX_MATCHES=1`). Mais partidas ao mesmo tempo pedem um plano
+     maior e `NEPHELIA_MAX_MATCHES` maior.
+3. **Variáveis:** nenhuma é obrigatória. O matchmaker percebe que está no Render (`RENDER=true`) e
+   usa a porta (`PORT`), o endereço público (`RENDER_EXTERNAL_URL`, virando `wss://`), o
+   `bin/godot` e o `game/nephelia_server.pck`.
+4. **Conferir:** `https://<serviço>.onrender.com/v1/health` responde `{"ok":true}`, e o log mostra
+   `match ready`, a partida vazia que fica pronta.
+5. **Jogo:** coloque `https://<serviço>.onrender.com` em `OnlineMatchmaker.SERVICE_URL` e publique
+   a atualização.
+
+## Colocar no ar numa VPS com UDP (Oracle Cloud, grátis, São Paulo)
 
 1. **Conta:** crie a conta em oracle.com/cloud/free. Escolha **Brazil East (São Paulo)** como
    região principal (*home region*). As máquinas grátis só existem nessa região, e ela **não pode ser

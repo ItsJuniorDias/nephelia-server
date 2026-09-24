@@ -3,15 +3,21 @@
 //   GET  /v1/health     -> 200 {"ok":true}
 //   GET  /v1/status     -> 200 {"players":3,"matches":2}
 //   POST /v1/matchmake  {"version":1,"name":"Alex","platform":"ios"}
-//        200 {"host":"1.2.3.4","port":24700,"match":"m1","ticket":"..."}
+//        200 {"host":"1.2.3.4","port":24700,"match":"m1","ticket":"..."}             (ENet)
+//        200 {"url":"wss://x.onrender.com/play/m1","match":"m1","ticket":"..."}      (WebSocket)
 //        400 {"error":"bad_request"}      pedido estragado
 //        426 {"error":"update_required"}  versão do jogo diferente da do servidor
 //        429 {"error":"rate_limited"}     pedidos demais deste IP
 //        503 {"error":"no_capacity"}      todas as partidas cheias
 //        502 {"error":"match_failed"}     a partida nova não abriu
+//   GET  /play/<partida>  (WebSocket) -> repassado para o servidor da partida, na mesma máquina
+//        (modo websocket: o Render só deixa entrar HTTP(S) por uma porta)
 
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
+import { connect } from "node:net";
+import type { Socket } from "node:net";
+import type { Duplex } from "node:stream";
 import type { Config } from "./config.ts";
 import type { Logger } from "./log.ts";
 import type { MatchRequest, MatchResult } from "./matchmaker.ts";
@@ -21,6 +27,8 @@ import { RateLimiter } from "./rate_limit.ts";
 export interface MatchService {
 	request(request: MatchRequest): Promise<MatchResult>;
 	summary(): { players: number; matches: unknown[] };
+	/** Porta local da partida pronta (WebSocket); null = não existe. */
+	portOf(id: string): number | null;
 }
 
 const MAX_BODY_BYTES = 1024;
@@ -43,6 +51,9 @@ export function createApi(service: MatchService, config: Config, log: Logger, li
 		});
 	});
 	server.on("close", () => clearInterval(pruneTimer));
+	server.on("upgrade", (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+		proxyWebSocket(request, socket, head, service, log);
+	});
 	// Pedido lento ou pendurado não segura conexão para sempre.
 	server.requestTimeout = 45_000;
 	server.headersTimeout = 10_000;
@@ -74,7 +85,9 @@ export function createApi(service: MatchService, config: Config, log: Logger, li
 				return;
 			}
 			const result = await service.request(parsed);
-			if (result.ok) {
+			if (result.ok && result.url !== "") {
+				send(response, 200, { url: result.url, match: result.match, ticket: result.ticket });
+			} else if (result.ok) {
 				send(response, 200, { host: result.host, port: result.port, match: result.match, ticket: result.ticket });
 			} else {
 				send(response, ERROR_STATUS[result.error] ?? 500, { error: result.error });
@@ -85,6 +98,46 @@ export function createApi(service: MatchService, config: Config, log: Logger, li
 	}
 
 	return server;
+}
+
+// WebSocket de um jogador (wss://.../play/<partida>): liga direto no servidor da partida (que só
+// escuta na própria máquina) e deixa os bytes passarem dos dois lados. O aperto de mão do
+// WebSocket é feito pelo próprio servidor da partida (o pedido original vai inteiro para ele).
+function proxyWebSocket(request: IncomingMessage, client: Duplex, head: Buffer, service: MatchService,
+		log: Logger): void {
+	const path = new URL(request.url ?? "/", "http://localhost").pathname;
+	const id = /^\/play\/([A-Za-z0-9_-]{1,32})$/.exec(path)?.[1];
+	const port = id === undefined ? null : service.portOf(id);
+	if (port === null) {
+		client.end("HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+		return;
+	}
+	const upstream = connect(port, "127.0.0.1");
+	upstream.setNoDelay(true);
+	(client as Socket).setNoDelay?.(true);
+	upstream.on("connect", () => {
+		let lines = `${request.method ?? "GET"} ${request.url ?? "/"} HTTP/${request.httpVersion}\r\n`;
+		for (let i = 0; i + 1 < request.rawHeaders.length; i += 2) {
+			lines += `${request.rawHeaders[i]}: ${request.rawHeaders[i + 1]}\r\n`;
+		}
+		upstream.write(lines + "\r\n");
+		if (head.length > 0) {
+			upstream.write(head);
+		}
+		client.pipe(upstream);
+		upstream.pipe(client);
+	});
+	const close = (): void => {
+		client.destroy();
+		upstream.destroy();
+	};
+	upstream.on("error", (error) => {
+		log.warn("match server connection failed", { match: id, error: error.message });
+		close();
+	});
+	upstream.on("close", close);
+	client.on("error", close);
+	client.on("close", close);
 }
 
 /** Confere e limpa o pedido de partida (null = estragado). */

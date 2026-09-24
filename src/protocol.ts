@@ -2,6 +2,7 @@
 //
 // O matchmaker abre cada partida como um processo:
 //   <godot> <godotArgs...> -- --server --port=<porta> --match-id=<id> --max-players=<n>
+//       [--transport=websocket --bind=127.0.0.1]   (WebSocket: só o matchmaker conecta nela)
 // e o servidor escreve na saída padrão uma linha por evento, começando com "NEPHELIA ":
 //   NEPHELIA {"event":"ready","port":24700,"version":1}
 //   NEPHELIA {"event":"status","humans":2,"state":"running","time_left":123.4}
@@ -60,6 +61,10 @@ function isInt(value: unknown): value is number {
 }
 
 /** Argumentos depois do "--" que o servidor de partida entende. */
-export function serverArgs(port: number, matchId: string, maxPlayers: number): string[] {
-	return ["--server", `--port=${port}`, `--match-id=${matchId}`, `--max-players=${maxPlayers}`];
+export function serverArgs(port: number, matchId: string, maxPlayers: number, websocket = false): string[] {
+	const args = ["--server", `--port=${port}`, `--match-id=${matchId}`, `--max-players=${maxPlayers}`];
+	if (websocket) {
+		args.push("--transport=websocket", "--bind=127.0.0.1");
+	}
+	return args;
 }
