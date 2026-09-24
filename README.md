@@ -113,8 +113,8 @@ de ping). A região só é escolhida ao criar o serviço.
    **"Linux Server"** (servidor dedicado: imagens e modelos viram marcadores vazios, então nenhuma
    arte vai para cá) para `game/nephelia_server.pck` deste repositório e faça commit.
 2. **Serviço no Render** (Web Service, runtime Node, ligado a este repositório):
-   - Build Command: `npm ci && bash scripts/install_godot.sh` (baixa o Godot oficial para Linux em
-     `bin/godot`)
+   - Build Command: o padrão (`npm install`) já serve: o `postinstall` baixa o Godot oficial para
+     Linux em `bin/godot` quando está no Render
    - Start Command: `npm start`
    - Health Check Path: `/v1/health`
    - Plano: Starter (US$ 7) ou maior. No Starter (512 MB, meio núcleo) cabe **uma partida por vez**,

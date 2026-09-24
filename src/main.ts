@@ -2,7 +2,7 @@
 //   node src/main.ts [--httpPort=8080] [--godotBin=...] [--godotArgs="--headless --path /jogo"] ...
 // Configuração em config.ts / .env.example.
 
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, existsSync } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
 import { loadConfig } from "./config.ts";
 import { GodotSpawner } from "./godot_spawner.ts";
@@ -15,11 +15,16 @@ const config = loadConfig();
 const matchmaker = new Matchmaker(config, new GodotSpawner(config, log), Date.now, log);
 const server = createApi(matchmaker, config, log);
 
-// Sem o Godot (ou o servidor exportado do jogo) não há como abrir partida: avisa logo ao ligar.
+// Sem o Godot ou sem o pacote do jogo não há como abrir partida: avisa logo ao ligar.
 if (!executableExists(config.godotBin)) {
 	log.error("match server executable not found: set NEPHELIA_GODOT_BIN (see README)", {
 		godotBin: config.godotBin,
 	});
+}
+const packIndex = config.godotArgs.indexOf("--main-pack");
+const pack = packIndex >= 0 ? config.godotArgs[packIndex + 1] : undefined;
+if (pack !== undefined && !existsSync(pack)) {
+	log.error("game pack not found: export the game's \"Linux Server\" preset to this path (see README)", { pack });
 }
 
 const ticker = setInterval(() => matchmaker.tick(), 1_000);

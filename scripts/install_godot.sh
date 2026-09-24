@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
-# Baixa o Godot oficial para Linux (o mesmo da versão do jogo) em ./bin/godot. Roda no build do
-# Render (Build Command: npm ci && bash scripts/install_godot.sh). No Mac não precisa: lá o
-# matchmaker usa o Godot que já está instalado (--godotBin).
+# Baixa o Godot oficial para Linux (o mesmo da versão do jogo) em ./bin/godot. No Render roda
+# sozinho no build (`npm install`/`npm ci` chamam o postinstall do package.json). No Mac não precisa:
+# lá o matchmaker usa o Godot que já está instalado (--godotBin).
 set -euo pipefail
+
+# `--only-on-render`: roda sozinho no `npm install` (postinstall), mas só no Render (RENDER=true).
+if [ "${1:-}" = "--only-on-render" ] && [ "${RENDER:-}" != "true" ]; then
+	exit 0
+fi
 
 VERSION="${GODOT_VERSION:-4.7.2-stable}"
 case "$(uname -m)" in

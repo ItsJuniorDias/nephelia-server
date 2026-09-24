@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/main.ts",
     "test": "node --disable-warning=ExperimentalWarning --test \"test/**/*.test.ts\"",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "postinstall": "bash scripts/install_godot.sh --only-on-render"
   },
   "devDependencies": {
     "@types/node": "^24.13.6",
